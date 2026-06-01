@@ -37,6 +37,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_replace.h"
+#include "absl/strings/str_split.h"
 #include "gmock/gmock.h"
 #include "src/core/credentials/call/composite/composite_call_credentials.h"
 #include "src/core/credentials/call/external/aws_external_account_credentials.h"
@@ -82,14 +83,6 @@
 #include "test/core/event_engine/fuzzing_event_engine/fuzzing_event_engine.h"
 #include "test/core/test_util/test_call_creds.h"
 #include "test/core/test_util/test_config.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
-#include "absl/log/log.h"
-#include "absl/strings/match.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/str_format.h"
-#include "absl/strings/str_replace.h"
-#include "absl/strings/str_split.h"
 
 // TODO(roth): Refactor this so that we can split up the individual call
 // creds tests into their own files.
@@ -4705,7 +4698,8 @@ const char kGdchTestPrivateKeyPem[] =
 
 class GDCHServiceAccountCredentialsTest : public ::testing::Test {
  public:
-  static OrphanablePtr<GDCHServiceAccountCredentials::FetchBody> CallRetrieveSubjectToken(
+  static OrphanablePtr<GDCHServiceAccountCredentials::FetchBody>
+  CallRetrieveSubjectToken(
       GDCHServiceAccountCredentials* creds, Timestamp deadline,
       absl::AnyInvocable<void(absl::StatusOr<std::string>)> on_done) {
     return creds->RetrieveSubjectToken(deadline, std::move(on_done));
@@ -4743,7 +4737,8 @@ int gdch_service_account_creds_httpcli_post_success(
   EXPECT_TRUE(parsed_body.ok()) << parsed_body.status().ToString();
   EXPECT_EQ(parsed_body->object().at("grant_type").string(),
             "urn:ietf:params:oauth:token-type:token-exchange");
-  EXPECT_EQ(parsed_body->object().at("audience").string(), "https://my-audience.com");
+  EXPECT_EQ(parsed_body->object().at("audience").string(),
+            "https://my-audience.com");
   EXPECT_EQ(parsed_body->object().at("requested_token_type").string(),
             "urn:ietf:params:oauth:token-type:access_token");
   EXPECT_EQ(parsed_body->object().at("subject_token_type").string(),
@@ -4753,7 +4748,8 @@ int gdch_service_account_creds_httpcli_post_success(
   std::vector<std::string> parts = absl::StrSplit(jwt_token, '.');
   EXPECT_EQ(parts.size(), 3);
 
-  *response = http_response(200, "{\"access_token\": \"my-exchanged-gdch-token\"}");
+  *response =
+      http_response(200, "{\"access_token\": \"my-exchanged-gdch-token\"}");
   ExecCtx::Run(DEBUG_LOCATION, on_done, absl::OkStatus());
   return 1;
 }
@@ -4769,7 +4765,8 @@ TEST_F(GDCHServiceAccountCredentialsTest, BasicRetrieveSubjectToken) {
       {"token_uri", Json::FromString("https://test-token-uri.com/token")},
   };
 
-  auto creds = GDCHServiceAccountCredentials::Create(Json::FromObject(obj), "https://my-audience.com", event_engine_);
+  auto creds = GDCHServiceAccountCredentials::Create(
+      Json::FromObject(obj), "https://my-audience.com", event_engine_);
   ASSERT_TRUE(creds.ok()) << creds.status().ToString();
   ASSERT_NE(*creds, nullptr);
   EXPECT_EQ((*creds)->min_security_level(), GRPC_PRIVACY_AND_INTEGRITY);
@@ -4778,7 +4775,7 @@ TEST_F(GDCHServiceAccountCredentialsTest, BasicRetrieveSubjectToken) {
   HttpRequest::SetOverride(httpcli_get_should_not_be_called,
                            gdch_service_account_creds_httpcli_post_success,
                            httpcli_put_should_not_be_called);
-  
+
   absl::StatusOr<std::string> fetched_token;
   bool done = false;
   auto fetch_body = GDCHServiceAccountCredentialsTest::CallRetrieveSubjectToken(
@@ -4787,10 +4784,10 @@ TEST_F(GDCHServiceAccountCredentialsTest, BasicRetrieveSubjectToken) {
         fetched_token = std::move(result);
         done = true;
       });
-  
+
   event_engine_->TickUntilIdle();
   ExecCtx::Get()->Flush();
-  
+
   EXPECT_TRUE(done);
   ASSERT_TRUE(fetched_token.ok()) << fetched_token.status().ToString();
   EXPECT_EQ(*fetched_token, "my-exchanged-gdch-token");
