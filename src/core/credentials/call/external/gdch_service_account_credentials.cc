@@ -629,3 +629,21 @@ absl::string_view GDCHServiceAccountCredentials::CredentialSourceType() {
 }
 
 }  // namespace grpc_core
+
+grpc_call_credentials* grpc_gdch_service_account_credentials_create(
+    const char* json_string, const char* audience_string) {
+  auto json = grpc_core::JsonParse(json_string);
+  if (!json.ok()) {
+    LOG(ERROR) << "GDCH service account credentials creation failed. Error: "
+               << json.status();
+    return nullptr;
+  }
+  auto creds =
+      grpc_core::GDCHServiceAccountCredentials::Create(*json, audience_string);
+  if (!creds.ok()) {
+    LOG(ERROR) << "GDCH service account credentials creation failed. Error: "
+               << grpc_core::StatusToString(creds.status());
+    return nullptr;
+  }
+  return creds->release();
+}
