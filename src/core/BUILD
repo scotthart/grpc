@@ -5149,6 +5149,7 @@ grpc_cc_library(
         "credentials/call/external/aws_request_signer.cc",
         "credentials/call/external/external_account_credentials.cc",
         "credentials/call/external/file_external_account_credentials.cc",
+        "credentials/call/external/gdch_service_account_credentials.cc",
         "credentials/call/external/url_external_account_credentials.cc",
     ],
     hdrs = [
@@ -5156,6 +5157,7 @@ grpc_cc_library(
         "credentials/call/external/aws_request_signer.h",
         "credentials/call/external/external_account_credentials.h",
         "credentials/call/external/file_external_account_credentials.h",
+        "credentials/call/external/gdch_service_account_credentials.h",
         "credentials/call/external/url_external_account_credentials.h",
     ],
     external_deps = [
