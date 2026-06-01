@@ -251,6 +251,7 @@ libs:
   - src/core/credentials/call/external/aws_request_signer.h
   - src/core/credentials/call/external/external_account_credentials.h
   - src/core/credentials/call/external/file_external_account_credentials.h
+  - src/core/credentials/call/external/gdch_service_account_credentials.h
   - src/core/credentials/call/external/url_external_account_credentials.h
   - src/core/credentials/call/gcp_service_account_identity/gcp_service_account_identity_credentials.h
   - src/core/credentials/call/iam/iam_credentials.h
@@ -1384,6 +1385,7 @@ libs:
   - src/core/credentials/call/external/aws_request_signer.cc
   - src/core/credentials/call/external/external_account_credentials.cc
   - src/core/credentials/call/external/file_external_account_credentials.cc
+  - src/core/credentials/call/external/gdch_service_account_credentials.cc
   - src/core/credentials/call/external/url_external_account_credentials.cc
   - src/core/credentials/call/gcp_service_account_identity/gcp_service_account_identity_credentials.cc
   - src/core/credentials/call/iam/iam_credentials.cc
@@ -14026,6 +14028,16 @@ targets:
   - protobuf
   - grpc_test_util
   uses_polling: false
+- name: gdch_service_account_credentials_test
+  gtest: true
+  build: test
+  language: c++
+  headers: []
+  src:
+  - test/core/credentials/call/external/gdch_service_account_credentials_test.cc
+  deps:
+  - gtest
+  - grpc_test_util
 - name: generic_end2end_test
   gtest: true
   build: test

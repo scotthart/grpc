@@ -31,6 +31,12 @@
 #include <memory>
 #include <utility>
 
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
+#include "absl/strings/str_split.h"
+#include "absl/strings/string_view.h"
 #include "src/core/credentials/call/call_credentials.h"
 #include "src/core/credentials/call/json_util.h"
 #include "src/core/credentials/transport/transport_credentials.h"
@@ -41,12 +47,6 @@
 #include "src/core/util/http_client/parser.h"
 #include "src/core/util/json/json.h"
 #include "src/core/util/json/json_reader.h"
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/str_format.h"
-#include "absl/strings/str_split.h"
-#include "absl/strings/string_view.h"
 
 namespace grpc_core {
 namespace {
@@ -606,15 +606,14 @@ GDCHServiceAccountCredentials::RetrieveSubjectToken(
         } else {
           http_request_creds = CreateHttpRequestSSLCredentials();
         }
-        auto http_request =
-            HttpRequest::Post(std::move(*url), /*args=*/nullptr, pollent(),
-                              request->get(), deadline, on_http_response,
-                              response, std::move(http_request_creds));
+        auto http_request = HttpRequest::Post(
+            *url, /*args=*/nullptr, pollent(), request->get(), deadline,
+            on_http_response, response, std::move(http_request_creds));
         http_request->Start();
         return http_request;
       },
       // absl::AnyInvocable<void(absl::StatusOr<std::string>)> on_done
-      [this, on_done = std::move(on_done)](
+      [on_done = std::move(on_done)](
           absl::StatusOr<std::string> response_body) mutable {
         if (!response_body.ok()) {
           on_done(std::move(response_body));
