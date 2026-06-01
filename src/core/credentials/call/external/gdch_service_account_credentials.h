@@ -108,6 +108,8 @@ class GDCHServiceAccountCredentials final : public ExternalAccountCredentials {
     GDCHServiceAccountCredentials* creds_;
   };
 #endif
+  friend class GDCHServiceAccountCredentialsTest;
+
   OrphanablePtr<FetchBody> RetrieveSubjectToken(
       Timestamp deadline,
       absl::AnyInvocable<void(absl::StatusOr<std::string>)> on_done) override;
