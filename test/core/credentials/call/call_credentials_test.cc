@@ -4840,6 +4840,36 @@ TEST_F(GDCHServiceAccountCredentialsTest, BasicRetrieveSubjectToken) {
   HttpRequest::SetOverride(nullptr, nullptr, nullptr);
 }
 
+TEST_F(ExternalAccountCredentialsTest,
+       GDCHServiceAccountCredsSuccessFormatText) {
+  ExecCtx exec_ctx;
+  Json::Object obj = Json::Object{
+      {"type", Json::FromString("gdch_service_account")},
+      {"format_version", Json::FromString("1")},
+      {"project", Json::FromString("test-project")},
+      {"private_key_id", Json::FromString("test-private-key-id")},
+      {"private_key", Json::FromString(kGdchTestPrivateKeyPem)},
+      {"name", Json::FromString("test-name")},
+      {"token_uri", Json::FromString("https://test-token-uri.com/token")},
+  };
+
+  auto creds = GDCHServiceAccountCredentials::Create(
+      Json::FromObject(obj), "https://my-audience.com", event_engine_);
+  ASSERT_TRUE(creds.ok()) << creds.status().ToString();
+  ASSERT_NE(*creds, nullptr);
+  EXPECT_EQ((*creds)->min_security_level(), GRPC_PRIVACY_AND_INTEGRITY);
+  auto state = RequestMetadataState::NewInstance(
+      absl::OkStatus(), "authorization: Bearer my-exchanged-gdch-token");
+  HttpRequest::SetOverride(httpcli_get_should_not_be_called,
+                           gdch_service_account_creds_httpcli_post_success,
+                           httpcli_put_should_not_be_called);
+  state->RunRequestMetadataTest(creds->get(), kTestUrlScheme, kTestAuthority,
+                                kTestPath);
+  ExecCtx::Get()->Flush();
+  event_engine_->TickUntilIdle();
+  HttpRequest::SetOverride(nullptr, nullptr, nullptr);
+}
+
 MATCHER(AccessTokenIsSTSBearer, "access token is STS Bearer") {
   return absl::StartsWith(arg, "Bearer STS-Bearer-");
 }

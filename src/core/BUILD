@@ -5185,6 +5185,7 @@ grpc_cc_library(
         "slice_refcount",
         "status_conversion",
         "status_helper",
+        "sync",
         "time",
         "token_fetcher_credentials",
         "//:gpr",

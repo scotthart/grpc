@@ -32,6 +32,7 @@
 #include <utility>
 
 #include "src/core/credentials/call/call_credentials.h"
+#include "src/core/util/sync.h"
 #include "src/core/credentials/call/json_util.h"
 #include "src/core/credentials/transport/transport_credentials.h"
 #include "src/core/lib/iomgr/closure.h"
@@ -380,15 +381,8 @@ GDCHServiceAccountCredentials::AssertionComponentsFromInfo(Info const& info,
 
   // Resulting access token should expire after one hour.
   gpr_timespec token_lifetime = {3600, 0, GPR_TIMESPAN};
-  auto expiration = gpr_time_add(now, token_lifetime);
-  // As much as possible, do the time arithmetic using the std::chrono types.
-  // Convert to an integer only when we are dealing with timestamps since the
-  // epoch. Note that we cannot use `time_t` directly because that might be a
-  // floating point.
-  // auto const now_from_epoch =
-  //     static_cast<std::intmax_t>(std::chrono::system_clock::to_time_t(now));
-  // auto const expiration_from_epoch = static_cast<std::intmax_t>(
-  //     std::chrono::system_clock::to_time_t(expiration));
+  gpr_timespec now_realtime = gpr_convert_clock_type(now, GPR_CLOCK_REALTIME);
+  gpr_timespec expiration = gpr_time_add(now_realtime, token_lifetime);
 
   auto iss_sub_value = absl::StrCat("system:serviceaccount:", info.project_id,
                                     ":", info.service_identity_name);
@@ -397,7 +391,7 @@ GDCHServiceAccountCredentials::AssertionComponentsFromInfo(Info const& info,
       {"iss", Json::FromString(iss_sub_value)},
       {"sub", Json::FromString(iss_sub_value)},
       {"aud", Json::FromString(info.token_uri)},
-      {"iat", Json::FromNumber(now.tv_sec)},
+      {"iat", Json::FromNumber(now_realtime.tv_sec)},
       {"exp", Json::FromNumber(expiration.tv_sec)},
   });
 
@@ -618,7 +612,7 @@ GDCHServiceAccountCredentials::RetrieveSubjectToken(
         return http_request;
       },
       // absl::AnyInvocable<void(absl::StatusOr<std::string>)> on_done
-      [this, on_done = std::move(on_done)](
+      [on_done = std::move(on_done)](
           absl::StatusOr<std::string> response_body) mutable {
         if (!response_body.ok()) {
           on_done(std::move(response_body));
@@ -626,6 +620,62 @@ GDCHServiceAccountCredentials::RetrieveSubjectToken(
         }
         on_done(ParseHttpResponse(*response_body));
       });
+}
+
+class GDCHServiceAccountCredentials::GDCHFetchRequest final
+    : public TokenFetcherCredentials::FetchRequest {
+ public:
+  GDCHFetchRequest(
+      GDCHServiceAccountCredentials* creds, Timestamp deadline,
+      absl::AnyInvocable<void(
+          absl::StatusOr<RefCountedPtr<TokenFetcherCredentials::Token>>)>
+          on_done)
+      : creds_(creds), on_done_(std::move(on_done)) {
+    fetch_body_ = creds_->RetrieveSubjectToken(
+        deadline,
+        [this](absl::StatusOr<std::string> result) {
+          OnSubjectToken(std::move(result));
+        });
+  }
+
+  void Orphan() override {
+    {
+      MutexLock lock(&mu_);
+      fetch_body_.reset();
+    }
+    Unref();
+  }
+
+ private:
+  void OnSubjectToken(absl::StatusOr<std::string> result) {
+    absl::StatusOr<RefCountedPtr<TokenFetcherCredentials::Token>> token;
+    if (!result.ok()) {
+      token = result.status();
+    } else {
+      token = MakeRefCounted<TokenFetcherCredentials::Token>(
+          Slice::FromCopiedString(absl::StrCat("Bearer ", *result)),
+          Timestamp::Now() + Duration::Seconds(3600));
+    }
+    creds_->event_engine().Run([on_done = std::exchange(on_done_, nullptr),
+                                token = std::move(token)]() mutable {
+      ExecCtx exec_ctx;
+      std::exchange(on_done, nullptr)(std::move(token));
+    });
+  }
+
+  GDCHServiceAccountCredentials* creds_;
+  absl::AnyInvocable<void(
+      absl::StatusOr<RefCountedPtr<TokenFetcherCredentials::Token>>)>
+      on_done_;
+  Mutex mu_;
+  OrphanablePtr<FetchBody> fetch_body_ ABSL_GUARDED_BY(&mu_);
+};
+
+OrphanablePtr<TokenFetcherCredentials::FetchRequest>
+GDCHServiceAccountCredentials::FetchToken(
+    Timestamp deadline,
+    absl::AnyInvocable<void(absl::StatusOr<RefCountedPtr<Token>>)> on_done) {
+  return MakeOrphanable<GDCHFetchRequest>(this, deadline, std::move(on_done));
 }
 
 absl::string_view GDCHServiceAccountCredentials::CredentialSourceType() {
