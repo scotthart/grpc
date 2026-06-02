@@ -452,6 +452,8 @@ absl::StatusOr<std::string> GDCHServiceAccountCredentials::CreateRequestBody(
   gpr_timespec now = gpr_now(GPR_CLOCK_REALTIME);
 
   auto [header, claim] = AssertionComponentsFromInfo(info, now);
+  std::cout << __func__ << ": header=\n" << header << std::endl;
+  std::cout << __func__ << ": claim=\n" << claim << std::endl;
   auto jwt =
       MakeJWTAssertion(header, claim, info.private_key, SignatureFormat::kRaw);
   if (!jwt.ok()) return jwt.status();
@@ -467,7 +469,9 @@ absl::StatusOr<std::string> GDCHServiceAccountCredentials::CreateRequestBody(
        Json::FromString("urn:k8s:params:oauth:token-type:serviceaccount")},
   });
 
-  return JsonDump(payload);
+  std::string payload_str = JsonDump(payload);
+  std::cout << __func__ << ": payload=\n" << payload_str << std::endl;
+  return payload_str;
 
 #if 0
 
