@@ -274,14 +274,6 @@ GDCHServiceAccountCredentials::ParseServiceAccountJson(Json const& json) {
     Store store;
     std::optional<std::string> value = std::nullopt;
   };
-  // type required string
-  // format_version required string
-  // project required string
-  // private_key_id required string
-  // private_key required string
-  // name required string
-  // ca_cert_path optional string
-  // token_uri required string
   std::vector<Field> fields{
       {"type", required_field,
        [](Info& info, iterator_type const& l) {
@@ -372,14 +364,13 @@ GDCHServiceAccountCredentials::RetrieveSubjectToken(
 
 std::pair<std::string, std::string>
 GDCHServiceAccountCredentials::AssertionComponentsFromInfo(Info const& info,
-                                                           gpr_timespec) {
+                                                           std::chrono::system_clock::time_point now) {
   Json header = Json::FromObject({
       {"alg", Json::FromString("ES256")},
       {"typ", Json::FromString("JWT")},
       {"kid", Json::FromString(info.private_key_id)},
   });
 
-  auto now = std::chrono::system_clock::now();
   auto expiration = now + std::chrono::seconds(3600);
 
   auto const now_from_epoch =
@@ -460,10 +451,10 @@ absl::StatusOr<std::string> GDCHServiceAccountCredentials::CreateRequestBody(
     iss_sub_value, iss_sub_value, info.token_uri, now_from_epoch, expiration_from_epoch));
 #endif
 
-  gpr_timespec now = gpr_now(GPR_CLOCK_REALTIME);
+  // gpr_timespec now = gpr_now(GPR_CLOCK_REALTIME);
   // auto now = std::chrono::system_clock::now();
 
-  auto [header, claim] = AssertionComponentsFromInfo(info, now);
+  auto [header, claim] = AssertionComponentsFromInfo(info, std::chrono::system_clock::now());
   std::cout << __func__ << ": header=\n" << header << std::endl;
   std::cout << __func__ << ": claim=\n" << claim << std::endl;
   auto jwt =

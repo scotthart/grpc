@@ -224,7 +224,7 @@ TEST(GDCHServiceAccountCredentialsTest, SignUsingSha256FailureInvalidKey) {
 
 TEST(GDCHServiceAccountCredentialsTest, AssertionComponentsFromInfoSuccess) {
   auto info = CreateValidInfo();
-  gpr_timespec now = {12345678, 0, GPR_CLOCK_REALTIME};
+  auto now = std::chrono::system_clock::from_time_t(12345678);
 
   auto components = GDCHServiceAccountCredentials::AssertionComponentsFromInfo(info, now);
 

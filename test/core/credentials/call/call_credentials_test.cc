@@ -4745,33 +4745,6 @@ const char kGdchTestPrivateKeyPem[] =
     "GZ6rVuvkS+5Kw8k7IOVjrzE/lvVY1lDpKmIw2w7IgRxSIdDdyN6TbxNT\n"
     "-----END PRIVATE KEY-----\n";
 
-class GDCHServiceAccountCredentialsTest : public ::testing::Test {
- public:
-  static OrphanablePtr<GDCHServiceAccountCredentials::FetchBody> CallRetrieveSubjectToken(
-      GDCHServiceAccountCredentials* creds, Timestamp deadline,
-      absl::AnyInvocable<void(absl::StatusOr<std::string>)> on_done) {
-    return creds->RetrieveSubjectToken(deadline, std::move(on_done));
-  }
-
- protected:
-  void SetUp() override {
-    event_engine_ = std::make_shared<FuzzingEventEngine>(
-        FuzzingEventEngine::Options(), fuzzing_event_engine::Actions());
-    grpc_timer_manager_set_start_threaded(false);
-    grpc_init();
-  }
-
-  void TearDown() override {
-    event_engine_->FuzzingDone();
-    event_engine_->TickUntilIdle();
-    event_engine_->UnsetGlobalHooks();
-    WaitForSingleOwner(std::move(event_engine_));
-    grpc_shutdown_blocking();
-  }
-
-  std::shared_ptr<FuzzingEventEngine> event_engine_;
-};
-
 int gdch_service_account_creds_httpcli_post_success(
     const grpc_http_request* request, const URI& uri, absl::string_view body,
     Timestamp /*deadline*/, grpc_closure* on_done,
@@ -4799,6 +4772,63 @@ int gdch_service_account_creds_httpcli_post_success(
   ExecCtx::Run(DEBUG_LOCATION, on_done, absl::OkStatus());
   return 1;
 }
+
+TEST_F(ExternalAccountCredentialsTest,
+       GDCHServiceAccountCredsSuccess) {
+  ExecCtx exec_ctx;
+  Json::Object obj = Json::Object{
+      {"type", Json::FromString("gdch_service_account")},
+      {"format_version", Json::FromString("1")},
+      {"project", Json::FromString("test-project")},
+      {"private_key_id", Json::FromString("test-private-key-id")},
+      {"private_key", Json::FromString(kGdchTestPrivateKeyPem)},
+      {"name", Json::FromString("test-name")},
+      {"token_uri", Json::FromString("https://test-token-uri.com/token")},
+  };
+
+  auto creds = GDCHServiceAccountCredentials::Create(
+      Json::FromObject(obj), "https://my-audience.com", event_engine_);
+  ASSERT_TRUE(creds.ok()) << creds.status().ToString();
+  ASSERT_NE(*creds, nullptr);
+  EXPECT_EQ((*creds)->min_security_level(), GRPC_PRIVACY_AND_INTEGRITY);
+  auto state = RequestMetadataState::NewInstance(
+      absl::OkStatus(), "authorization: Bearer my-exchanged-gdch-token");
+  HttpRequest::SetOverride(httpcli_get_should_not_be_called,
+                           gdch_service_account_creds_httpcli_post_success,
+                           httpcli_put_should_not_be_called);
+  state->RunRequestMetadataTest(creds->get(), kTestUrlScheme, kTestAuthority,
+                                kTestPath);
+  ExecCtx::Get()->Flush();
+  event_engine_->TickUntilIdle();
+  HttpRequest::SetOverride(nullptr, nullptr, nullptr);
+}
+
+class GDCHServiceAccountCredentialsTest : public ::testing::Test {
+ public:
+  static OrphanablePtr<GDCHServiceAccountCredentials::FetchBody> CallRetrieveSubjectToken(
+      GDCHServiceAccountCredentials* creds, Timestamp deadline,
+      absl::AnyInvocable<void(absl::StatusOr<std::string>)> on_done) {
+    return creds->RetrieveSubjectToken(deadline, std::move(on_done));
+  }
+
+ protected:
+  void SetUp() override {
+    event_engine_ = std::make_shared<FuzzingEventEngine>(
+        FuzzingEventEngine::Options(), fuzzing_event_engine::Actions());
+    grpc_timer_manager_set_start_threaded(false);
+    grpc_init();
+  }
+
+  void TearDown() override {
+    event_engine_->FuzzingDone();
+    event_engine_->TickUntilIdle();
+    event_engine_->UnsetGlobalHooks();
+    WaitForSingleOwner(std::move(event_engine_));
+    grpc_shutdown_blocking();
+  }
+
+  std::shared_ptr<FuzzingEventEngine> event_engine_;
+};
 
 TEST_F(GDCHServiceAccountCredentialsTest, BasicRetrieveSubjectToken) {
   Json::Object obj = Json::Object{
@@ -4840,41 +4870,11 @@ TEST_F(GDCHServiceAccountCredentialsTest, BasicRetrieveSubjectToken) {
   HttpRequest::SetOverride(nullptr, nullptr, nullptr);
 }
 
-TEST_F(ExternalAccountCredentialsTest,
-       GDCHServiceAccountCredsSuccessFormatText) {
-  ExecCtx exec_ctx;
-  Json::Object obj = Json::Object{
-      {"type", Json::FromString("gdch_service_account")},
-      {"format_version", Json::FromString("1")},
-      {"project", Json::FromString("test-project")},
-      {"private_key_id", Json::FromString("test-private-key-id")},
-      {"private_key", Json::FromString(kGdchTestPrivateKeyPem)},
-      {"name", Json::FromString("test-name")},
-      {"token_uri", Json::FromString("https://test-token-uri.com/token")},
-  };
-
-  auto creds = GDCHServiceAccountCredentials::Create(
-      Json::FromObject(obj), "https://my-audience.com", event_engine_);
-  ASSERT_TRUE(creds.ok()) << creds.status().ToString();
-  ASSERT_NE(*creds, nullptr);
-  EXPECT_EQ((*creds)->min_security_level(), GRPC_PRIVACY_AND_INTEGRITY);
-  auto state = RequestMetadataState::NewInstance(
-      absl::OkStatus(), "authorization: Bearer my-exchanged-gdch-token");
-  HttpRequest::SetOverride(httpcli_get_should_not_be_called,
-                           gdch_service_account_creds_httpcli_post_success,
-                           httpcli_put_should_not_be_called);
-  state->RunRequestMetadataTest(creds->get(), kTestUrlScheme, kTestAuthority,
-                                kTestPath);
-  ExecCtx::Get()->Flush();
-  event_engine_->TickUntilIdle();
-  HttpRequest::SetOverride(nullptr, nullptr, nullptr);
-}
-
 MATCHER(AccessTokenIsSTSBearer, "access token is STS Bearer") {
   return absl::StartsWith(arg, "Bearer STS-Bearer-");
 }
 
-
+// This test is designed to be run inside an GDCH Adhoc environment.
 TEST_F(GDCHServiceAccountCredentialsTest, RetrievesBearerTokenInAdhocEnvironemnt) {
   auto key_file_env = GetEnv("GRPC_TEST_GDCH_KEY_FILE");
   auto audience_env = GetEnv("GRPC_TEST_GDCH_AUDIENCE");
@@ -4884,14 +4884,10 @@ TEST_F(GDCHServiceAccountCredentialsTest, RetrievesBearerTokenInAdhocEnvironemnt
   auto contents = std::string{std::istreambuf_iterator<char>{is}, {}};
   ASSERT_THAT(contents, Not(::testing::IsEmpty()));
 
-//   std::string const audience = "global-api";
   auto creds = grpc_gdch_service_account_credentials_create(contents.c_str(), audience_env->c_str());
-
-//   std::shared_ptr<grpc::CallCredentials> creds = grpc::GDCHServiceAccountCredentials(contents, audience);
   ASSERT_THAT(creds, ::testing::NotNull());
 
   std::string token = grpc_test_fetch_oauth2_token_with_credentials(creds);
-  std::cout << __func__ << ": token=" << token << std::endl;
   EXPECT_THAT(token, AccessTokenIsSTSBearer());
 }
 

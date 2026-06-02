@@ -19,6 +19,7 @@
 
 #include <grpc/support/port_platform.h>
 
+#include <chrono>
 #include <functional>
 #include <map>
 #include <string>
@@ -34,6 +35,34 @@
 
 namespace grpc_core {
 
+// GDCH Service Account credentials.
+//
+// Uses the service account to create a JWT assertion which is then exchanged
+// for a STS bearer token.
+//
+// JSON Schema for the service account key file:
+// {
+//   "type": "object",
+//   "properties": {
+//     "type": { "type": "string", "const": "gdch_service_account" },
+//     "format_version": { "type": "string", "const": "1" },
+//     "project": { "type": "string" },
+//     "private_key_id": { "type": "string" },
+//     "private_key": { "type": "string" },
+//     "name": { "type": "string" },
+//     "ca_cert_path": { "type": "string" },
+//     "token_uri": { "type": "string" }
+//   },
+//   "required": [
+//     "type",
+//     "format_version",
+//     "project",
+//     "private_key_id",
+//     "private_key",
+//     "name",
+//     "token_uri"
+//   ]
+// }
 class GDCHServiceAccountCredentials final : public ExternalAccountCredentials {
  public:
   // OpenSSL outputs DER format signatures by default. RFC-7515 (JWT/JWS)
@@ -71,7 +100,7 @@ class GDCHServiceAccountCredentials final : public ExternalAccountCredentials {
           event_engine);
 
   static std::pair<std::string, std::string> AssertionComponentsFromInfo(
-      Info const& info, gpr_timespec gpr_now);
+      Info const& info, std::chrono::system_clock::time_point now);
 
   static absl::StatusOr<std::string> MakeJWTAssertion(
       std::string const& header, std::string const& payload,
@@ -82,32 +111,25 @@ class GDCHServiceAccountCredentials final : public ExternalAccountCredentials {
   struct GrpcDeleter {
     void operator()(grpc_http_request* ptr);
   };
+  
   using GrpcHttpRequestUniquePtr =
       std::unique_ptr<grpc_http_request, GrpcDeleter>;
+  
   static absl::StatusOr<GrpcHttpRequestUniquePtr> FormatHttpRequest(
       Info const& info, std::string const& audience);
+  
   static absl::StatusOr<std::string> ParseHttpResponse(
       std::string const& response_body);
+  
+  static UniqueTypeName Type();
+
+  std::optional<std::string> ca_cert_path() const {return info_.ca_cert_path;}
 
   std::string debug_string() override;
-
-  static UniqueTypeName Type();
 
   UniqueTypeName type() const override { return Type(); }
 
  private:
-#if 0
-  class GDCHServiceAccountFetchBody final : public FetchBody {
-   public:
-    GDCHServiceAccountFetchBody(
-      absl::AnyInvocable<void(absl::StatusOr<std::string>)> on_done,
-                                GDCHServiceAccountCredentials* creds);
-   private:
-    void Shutdown() override {}
-    void ReadFile();
-    GDCHServiceAccountCredentials* creds_;
-  };
-#endif
   friend class GDCHServiceAccountCredentialsTest;
 
   OrphanablePtr<FetchRequest> FetchToken(
