@@ -32,7 +32,6 @@
 #include <utility>
 
 #include "src/core/credentials/call/call_credentials.h"
-#include "src/core/util/sync.h"
 #include "src/core/credentials/call/json_util.h"
 #include "src/core/credentials/transport/transport_credentials.h"
 #include "src/core/lib/iomgr/closure.h"
@@ -42,6 +41,7 @@
 #include "src/core/util/http_client/parser.h"
 #include "src/core/util/json/json.h"
 #include "src/core/util/json/json_reader.h"
+#include "src/core/util/sync.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -363,8 +363,8 @@ GDCHServiceAccountCredentials::RetrieveSubjectToken(
 #endif
 
 std::pair<std::string, std::string>
-GDCHServiceAccountCredentials::AssertionComponentsFromInfo(Info const& info,
-                                                           std::chrono::system_clock::time_point now) {
+GDCHServiceAccountCredentials::AssertionComponentsFromInfo(
+    Info const& info, std::chrono::system_clock::time_point now) {
   Json header = Json::FromObject({
       {"alg", Json::FromString("ES256")},
       {"typ", Json::FromString("JWT")},
@@ -378,7 +378,8 @@ GDCHServiceAccountCredentials::AssertionComponentsFromInfo(Info const& info,
   auto const expiration_from_epoch = static_cast<std::intmax_t>(
       std::chrono::system_clock::to_time_t(expiration));
   std::cout << __func__ << ": now_from_epoch=" << now_from_epoch << std::endl;
-  std::cout << __func__ << ": expiration_from_epoch=" << expiration_from_epoch << std::endl; 
+  std::cout << __func__ << ": expiration_from_epoch=" << expiration_from_epoch
+            << std::endl;
 
 #if 0
   // Resulting access token should expire after one hour.
@@ -387,7 +388,7 @@ GDCHServiceAccountCredentials::AssertionComponentsFromInfo(Info const& info,
   gpr_timespec expiration = gpr_time_add(now_realtime, token_lifetime);
 
   std::cout << __func__ << ": now_realtime.tv_sec=" << now_realtime.tv_sec << std::endl;
-  std::cout << __func__ << ": expiration.tv_sec=" << expiration.tv_sec << std::endl; 
+  std::cout << __func__ << ": expiration.tv_sec=" << expiration.tv_sec << std::endl;
 #endif
   auto iss_sub_value = absl::StrCat("system:serviceaccount:", info.project_id,
                                     ":", info.service_identity_name);
@@ -454,7 +455,8 @@ absl::StatusOr<std::string> GDCHServiceAccountCredentials::CreateRequestBody(
   // gpr_timespec now = gpr_now(GPR_CLOCK_REALTIME);
   // auto now = std::chrono::system_clock::now();
 
-  auto [header, claim] = AssertionComponentsFromInfo(info, std::chrono::system_clock::now());
+  auto [header, claim] =
+      AssertionComponentsFromInfo(info, std::chrono::system_clock::now());
   std::cout << __func__ << ": header=\n" << header << std::endl;
   std::cout << __func__ << ": claim=\n" << claim << std::endl;
   auto jwt =
@@ -636,13 +638,12 @@ class GDCHServiceAccountCredentials::GDCHFetchRequest final
  public:
   GDCHFetchRequest(
       GDCHServiceAccountCredentials* creds, Timestamp deadline,
-      absl::AnyInvocable<void(
-          absl::StatusOr<RefCountedPtr<TokenFetcherCredentials::Token>>)>
+      absl::AnyInvocable<
+          void(absl::StatusOr<RefCountedPtr<TokenFetcherCredentials::Token>>)>
           on_done)
       : creds_(creds), on_done_(std::move(on_done)) {
     fetch_body_ = creds_->RetrieveSubjectToken(
-        deadline,
-        [this](absl::StatusOr<std::string> result) {
+        deadline, [this](absl::StatusOr<std::string> result) {
           OnSubjectToken(std::move(result));
         });
   }
