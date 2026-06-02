@@ -68,12 +68,12 @@ grpc_cc_test(
         "//src/core:unique_type_name",
         "//src/core:wait_for_single_owner",
         "//src/core:xds_credentials",
+        "//test/core/credentials/call/oauth2:oauth2_utils",
         "//test/core/event_engine:event_engine_test_utils",
         "//test/core/event_engine/fuzzing_event_engine",
         "//test/core/test_util:grpc_test_util",
         "//test/core/test_util:grpc_test_util_base",
         "//test/core/test_util:test_call_creds",
-        "//test/core/credentials/call/oauth2:oauth2_utils",
     ],
 )
 
