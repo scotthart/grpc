@@ -372,18 +372,32 @@ GDCHServiceAccountCredentials::RetrieveSubjectToken(
 
 std::pair<std::string, std::string>
 GDCHServiceAccountCredentials::AssertionComponentsFromInfo(Info const& info,
-                                                           gpr_timespec now) {
+                                                           gpr_timespec) {
   Json header = Json::FromObject({
       {"alg", Json::FromString("ES256")},
       {"typ", Json::FromString("JWT")},
       {"kid", Json::FromString(info.private_key_id)},
   });
 
+  auto now = std::chrono::system_clock::now();
+  auto expiration = now + std::chrono::seconds(3600);
+
+  auto const now_from_epoch =
+      static_cast<std::intmax_t>(std::chrono::system_clock::to_time_t(now));
+  auto const expiration_from_epoch = static_cast<std::intmax_t>(
+      std::chrono::system_clock::to_time_t(expiration));
+  std::cout << __func__ << ": now_from_epoch=" << now_from_epoch << std::endl;
+  std::cout << __func__ << ": expiration_from_epoch=" << expiration_from_epoch << std::endl; 
+
+#if 0
   // Resulting access token should expire after one hour.
   gpr_timespec token_lifetime = {3600, 0, GPR_TIMESPAN};
   gpr_timespec now_realtime = gpr_convert_clock_type(now, GPR_CLOCK_REALTIME);
   gpr_timespec expiration = gpr_time_add(now_realtime, token_lifetime);
 
+  std::cout << __func__ << ": now_realtime.tv_sec=" << now_realtime.tv_sec << std::endl;
+  std::cout << __func__ << ": expiration.tv_sec=" << expiration.tv_sec << std::endl; 
+#endif
   auto iss_sub_value = absl::StrCat("system:serviceaccount:", info.project_id,
                                     ":", info.service_identity_name);
 
@@ -391,8 +405,11 @@ GDCHServiceAccountCredentials::AssertionComponentsFromInfo(Info const& info,
       {"iss", Json::FromString(iss_sub_value)},
       {"sub", Json::FromString(iss_sub_value)},
       {"aud", Json::FromString(info.token_uri)},
-      {"iat", Json::FromNumber(now_realtime.tv_sec)},
-      {"exp", Json::FromNumber(expiration.tv_sec)},
+      {"iat", Json::FromNumber(now_from_epoch)},
+      {"exp", Json::FromNumber(expiration_from_epoch)},
+
+      // {"iat", Json::FromNumber(now_realtime.tv_sec)},
+      // {"exp", Json::FromNumber(expiration.tv_sec)},
   });
 
   // Note: we don't move here as it would prevent copy elision.
@@ -444,6 +461,7 @@ absl::StatusOr<std::string> GDCHServiceAccountCredentials::CreateRequestBody(
 #endif
 
   gpr_timespec now = gpr_now(GPR_CLOCK_REALTIME);
+  // auto now = std::chrono::system_clock::now();
 
   auto [header, claim] = AssertionComponentsFromInfo(info, now);
   std::cout << __func__ << ": header=\n" << header << std::endl;
