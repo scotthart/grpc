@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <fstream>
 #include <string>
 
 #include "src/core/credentials/call/composite/composite_call_credentials.h"
@@ -83,6 +84,8 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_replace.h"
 #include "absl/strings/str_split.h"
+
+#include "test/core/credentials/call/oauth2/oauth2_utils.h"
 
 // TODO(roth): Refactor this so that we can split up the individual call
 // creds tests into their own files.
@@ -4835,6 +4838,30 @@ TEST_F(GDCHServiceAccountCredentialsTest, BasicRetrieveSubjectToken) {
   EXPECT_EQ(*fetched_token, "my-exchanged-gdch-token");
 
   HttpRequest::SetOverride(nullptr, nullptr, nullptr);
+}
+
+MATCHER(AccessTokenIsSTSBearer, "access token is STS Bearer") {
+  return absl::StartsWith(arg, "Bearer STS-Bearer-");
+}
+
+
+TEST_F(GDCHServiceAccountCredentialsTest, RetrievesBearerTokenInAdhocEnvironemnt) {
+  auto key_file_env = GetEnv("GRPC_TEST_GDCH_KEY_FILE");
+  if (!key_file_env.has_value()) GTEST_SKIP();
+
+  std::ifstream is(*key_file_env);
+  auto contents = std::string{std::istreambuf_iterator<char>{is}, {}};
+  ASSERT_THAT(contents, Not(::testing::IsEmpty()));
+
+  std::string const audience = "global-api";
+  auto creds = grpc_gdch_service_account_credentials_create(contents.c_str(), audience.c_str());
+
+//   std::shared_ptr<grpc::CallCredentials> creds = grpc::GDCHServiceAccountCredentials(contents, audience);
+  ASSERT_THAT(creds, ::testing::NotNull());
+
+  auto token = grpc_test_fetch_oauth2_token_with_credentials(creds);
+  std::cout << __func__ << ": token=" << token << std::endl;
+  EXPECT_THAT(token, AccessTokenIsSTSBearer());
 }
 
 }  // namespace grpc_core
