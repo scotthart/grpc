@@ -67,6 +67,32 @@ GDCHServiceAccountCredentials::Info CreateValidInfo() {
   return info;
 }
 
+// --- Tests for SignUsingSha256 ---
+
+TEST(GDCHServiceAccountCredentialsTest, SignUsingSha256DERSuccess) {
+  std::string payload = "hello world";
+  auto sig = GDCHServiceAccountCredentials::SignUsingSha256(
+      payload, kTestPrivateKeyPem, GDCHServiceAccountCredentials::SignatureFormat::kDER);
+  ASSERT_TRUE(sig.ok()) << sig.status().ToString();
+  EXPECT_FALSE(sig->empty());
+}
+
+TEST(GDCHServiceAccountCredentialsTest, SignUsingSha256RawSuccess) {
+  std::string payload = "hello world";
+  auto sig = GDCHServiceAccountCredentials::SignUsingSha256(
+      payload, kTestPrivateKeyPem, GDCHServiceAccountCredentials::SignatureFormat::kRaw);
+  ASSERT_TRUE(sig.ok()) << sig.status().ToString();
+  // For ECDSA ES256 (P-256), raw signature coordinates r and s are 32 bytes each.
+  EXPECT_EQ(sig->size(), 64);
+}
+
+TEST(GDCHServiceAccountCredentialsTest, SignUsingSha256FailureInvalidKey) {
+  std::string payload = "hello world";
+  auto sig = GDCHServiceAccountCredentials::SignUsingSha256(
+      payload, "invalid pem content", GDCHServiceAccountCredentials::SignatureFormat::kRaw);
+  EXPECT_FALSE(sig.ok());
+}
+
 // --- Tests for ParseServiceAccountJson ---
 
 TEST(GDCHServiceAccountCredentialsTest, ParseServiceAccountJsonSuccess) {
@@ -164,60 +190,19 @@ TEST(GDCHServiceAccountCredentialsTest, ParseServiceAccountJsonFailureNonStringF
   }
 }
 
-// --- Tests for Type ---
+// --- Tests for Create ---
 
-TEST(GDCHServiceAccountCredentialsTest, TypeSuccess) {
-  EXPECT_EQ(GDCHServiceAccountCredentials::Type().name(), "GDCHServiceAccountCredentials");
+TEST(GDCHServiceAccountCredentialsTest, CreateSuccess) {
+  Json::Object obj = CreateValidServiceAccountObject();
+  auto creds = GDCHServiceAccountCredentials::Create(Json::FromObject(obj), "https://my-audience.com");
+  ASSERT_TRUE(creds.ok()) << creds.status().ToString();
+  ASSERT_NE(*creds, nullptr);
+  EXPECT_EQ((*creds)->debug_string(), "GDCHServiceAccountCredentials{Audience:)");
 }
 
-// --- Tests for ParseHttpResponse ---
-
-TEST(GDCHServiceAccountCredentialsTest, ParseHttpResponseSuccess) {
-  std::string response_body = "{\"access_token\": \"test-access-token\"}";
-  auto token = GDCHServiceAccountCredentials::ParseHttpResponse(response_body);
-  ASSERT_TRUE(token.ok()) << token.status().ToString();
-  EXPECT_EQ(*token, "test-access-token");
-}
-
-TEST(GDCHServiceAccountCredentialsTest, ParseHttpResponseFailureNotObject) {
-  auto token = GDCHServiceAccountCredentials::ParseHttpResponse("not-a-json");
-  EXPECT_FALSE(token.ok());
-}
-
-TEST(GDCHServiceAccountCredentialsTest, ParseHttpResponseFailureMissingToken) {
-  auto token = GDCHServiceAccountCredentials::ParseHttpResponse("{\"other_field\": \"value\"}");
-  EXPECT_FALSE(token.ok());
-}
-
-TEST(GDCHServiceAccountCredentialsTest, ParseHttpResponseFailureTokenNotString) {
-  auto token = GDCHServiceAccountCredentials::ParseHttpResponse("{\"access_token\": 123}");
-  EXPECT_FALSE(token.ok());
-}
-
-// --- Tests for SignUsingSha256 ---
-
-TEST(GDCHServiceAccountCredentialsTest, SignUsingSha256DERSuccess) {
-  std::string payload = "hello world";
-  auto sig = GDCHServiceAccountCredentials::SignUsingSha256(
-      payload, kTestPrivateKeyPem, GDCHServiceAccountCredentials::SignatureFormat::kDER);
-  ASSERT_TRUE(sig.ok()) << sig.status().ToString();
-  EXPECT_FALSE(sig->empty());
-}
-
-TEST(GDCHServiceAccountCredentialsTest, SignUsingSha256RawSuccess) {
-  std::string payload = "hello world";
-  auto sig = GDCHServiceAccountCredentials::SignUsingSha256(
-      payload, kTestPrivateKeyPem, GDCHServiceAccountCredentials::SignatureFormat::kRaw);
-  ASSERT_TRUE(sig.ok()) << sig.status().ToString();
-  // For ECDSA ES256 (P-256), raw signature coordinates r and s are 32 bytes each.
-  EXPECT_EQ(sig->size(), 64);
-}
-
-TEST(GDCHServiceAccountCredentialsTest, SignUsingSha256FailureInvalidKey) {
-  std::string payload = "hello world";
-  auto sig = GDCHServiceAccountCredentials::SignUsingSha256(
-      payload, "invalid pem content", GDCHServiceAccountCredentials::SignatureFormat::kRaw);
-  EXPECT_FALSE(sig.ok());
+TEST(GDCHServiceAccountCredentialsTest, CreateFailureInvalidJson) {
+  auto creds = GDCHServiceAccountCredentials::Create(Json::FromString("not-an-object"), "https://my-audience.com");
+  EXPECT_FALSE(creds.ok());
 }
 
 // --- Tests for AssertionComponentsFromInfo ---
@@ -347,19 +332,34 @@ TEST(GDCHServiceAccountCredentialsTest, FormatHttpRequestFailureInvalidKey) {
   EXPECT_FALSE(request.ok());
 }
 
-// --- Tests for Create ---
+// --- Tests for ParseHttpResponse ---
 
-TEST(GDCHServiceAccountCredentialsTest, CreateSuccess) {
-  Json::Object obj = CreateValidServiceAccountObject();
-  auto creds = GDCHServiceAccountCredentials::Create(Json::FromObject(obj), "https://my-audience.com");
-  ASSERT_TRUE(creds.ok()) << creds.status().ToString();
-  ASSERT_NE(*creds, nullptr);
-  EXPECT_EQ((*creds)->debug_string(), "GDCHServiceAccountCredentials{Audience:)");
+TEST(GDCHServiceAccountCredentialsTest, ParseHttpResponseSuccess) {
+  std::string response_body = "{\"access_token\": \"test-access-token\"}";
+  auto token = GDCHServiceAccountCredentials::ParseHttpResponse(response_body);
+  ASSERT_TRUE(token.ok()) << token.status().ToString();
+  EXPECT_EQ(*token, "test-access-token");
 }
 
-TEST(GDCHServiceAccountCredentialsTest, CreateFailureInvalidJson) {
-  auto creds = GDCHServiceAccountCredentials::Create(Json::FromString("not-an-object"), "https://my-audience.com");
-  EXPECT_FALSE(creds.ok());
+TEST(GDCHServiceAccountCredentialsTest, ParseHttpResponseFailureNotObject) {
+  auto token = GDCHServiceAccountCredentials::ParseHttpResponse("not-a-json");
+  EXPECT_FALSE(token.ok());
+}
+
+TEST(GDCHServiceAccountCredentialsTest, ParseHttpResponseFailureMissingToken) {
+  auto token = GDCHServiceAccountCredentials::ParseHttpResponse("{\"other_field\": \"value\"}");
+  EXPECT_FALSE(token.ok());
+}
+
+TEST(GDCHServiceAccountCredentialsTest, ParseHttpResponseFailureTokenNotString) {
+  auto token = GDCHServiceAccountCredentials::ParseHttpResponse("{\"access_token\": 123}");
+  EXPECT_FALSE(token.ok());
+}
+
+// --- Tests for Type ---
+
+TEST(GDCHServiceAccountCredentialsTest, TypeSuccess) {
+  EXPECT_EQ(GDCHServiceAccountCredentials::Type().name(), "GDCHServiceAccountCredentials");
 }
 
 }  // namespace

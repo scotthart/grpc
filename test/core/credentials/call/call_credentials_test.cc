@@ -72,6 +72,7 @@
 #include "src/core/util/unique_type_name.h"
 #include "src/core/util/uri.h"
 #include "src/core/util/wait_for_single_owner.h"
+#include "test/core/credentials/call/oauth2/oauth2_utils.h"
 #include "test/core/event_engine/event_engine_test_utils.h"
 #include "test/core/event_engine/fuzzing_event_engine/fuzzing_event_engine.h"
 #include "test/core/test_util/test_call_creds.h"
@@ -84,8 +85,6 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_replace.h"
 #include "absl/strings/str_split.h"
-
-#include "test/core/credentials/call/oauth2/oauth2_utils.h"
 
 // TODO(roth): Refactor this so that we can split up the individual call
 // creds tests into their own files.
@@ -4738,6 +4737,8 @@ TEST_F(JwtTokenFileCallCredentialsTest, InvalidToken) {
 // GDCHServiceAccountCredentials tests
 //
 
+// This JSON key was generated with the GDCH console and immediately revoked.
+// The identifiers have been changed as well.
 const char kGdchTestPrivateKeyPem[] =
     "-----BEGIN PRIVATE KEY-----\n"
     "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgUBPYGHx4AnG2rIxQ\n"
@@ -4874,7 +4875,8 @@ MATCHER(AccessTokenIsSTSBearer, "access token is STS Bearer") {
   return absl::StartsWith(arg, "Bearer STS-Bearer-");
 }
 
-// This test is designed to be run inside an GDCH Adhoc environment.
+// This test can only be executed inside a GDCH Adhoc environment. It uses
+// the presence of the input environment variables to enable.
 TEST_F(GDCHServiceAccountCredentialsTest, RetrievesBearerTokenInAdhocEnvironemnt) {
   auto key_file_env = GetEnv("GRPC_TEST_GDCH_KEY_FILE");
   auto audience_env = GetEnv("GRPC_TEST_GDCH_AUDIENCE");

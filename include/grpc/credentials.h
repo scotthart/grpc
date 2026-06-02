@@ -63,8 +63,8 @@ GRPCAPI grpc_call_credentials* grpc_external_account_credentials_create(
 /** Builds Google Distributed Cloud Hosting Service Account credentials.
 - json_string is the JSON string containing the service account key.
 - audience_string is the intended recipient or service.
- This API is used for experimental purposes for now and may change in the
-future. */
+  This API is used for experimental purposes for now and may change in the
+ future. */
 GRPCAPI grpc_call_credentials* grpc_gdch_service_account_credentials_create(
     const char* json_string, const char* audience_string);
 
