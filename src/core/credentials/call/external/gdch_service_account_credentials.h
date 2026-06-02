@@ -108,10 +108,10 @@ class GDCHServiceAccountCredentials final : public ExternalAccountCredentials {
 
   static absl::StatusOr<std::string> CreateRequestBody(
       Info const& info, std::string const& audience);
+  
   struct GrpcDeleter {
     void operator()(grpc_http_request* ptr);
   };
-  
   using GrpcHttpRequestUniquePtr =
       std::unique_ptr<grpc_http_request, GrpcDeleter>;
   
