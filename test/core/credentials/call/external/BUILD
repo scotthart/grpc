@@ -52,10 +52,9 @@ grpc_cc_test(
     deps = [
         "//:gpr",
         "//:grpc",
-        "//src/core:json",
         "//src/core:grpc_external_account_credentials",
+        "//src/core:json",
         "//test/core/test_util:grpc_test_util",
         "//test/core/test_util:grpc_test_util_base",
     ],
 )
-
