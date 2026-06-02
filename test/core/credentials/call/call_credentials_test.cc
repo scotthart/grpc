@@ -4871,27 +4871,28 @@ TEST_F(ExternalAccountCredentialsTest,
 }
 
 MATCHER(AccessTokenIsSTSBearer, "access token is STS Bearer") {
-  return arg && absl::StartsWith(arg, "Bearer STS-Bearer-");
+  return absl::StartsWith(arg, "Bearer STS-Bearer-");
 }
 
 
 TEST_F(GDCHServiceAccountCredentialsTest, RetrievesBearerTokenInAdhocEnvironemnt) {
   auto key_file_env = GetEnv("GRPC_TEST_GDCH_KEY_FILE");
-  if (!key_file_env.has_value()) GTEST_SKIP();
+  auto audience_env = GetEnv("GRPC_TEST_GDCH_AUDIENCE");
+  if (!key_file_env.has_value() || !audience_env.has_value()) GTEST_SKIP();
 
   std::ifstream is(*key_file_env);
   auto contents = std::string{std::istreambuf_iterator<char>{is}, {}};
   ASSERT_THAT(contents, Not(::testing::IsEmpty()));
 
-  std::string const audience = "global-api";
-  auto creds = grpc_gdch_service_account_credentials_create(contents.c_str(), audience.c_str());
+//   std::string const audience = "global-api";
+  auto creds = grpc_gdch_service_account_credentials_create(contents.c_str(), audience_env->c_str());
 
 //   std::shared_ptr<grpc::CallCredentials> creds = grpc::GDCHServiceAccountCredentials(contents, audience);
   ASSERT_THAT(creds, ::testing::NotNull());
 
-  auto token = grpc_test_fetch_oauth2_token_with_credentials(creds);
+  std::string token = grpc_test_fetch_oauth2_token_with_credentials(creds);
   std::cout << __func__ << ": token=" << token << std::endl;
-//   EXPECT_THAT(token, AccessTokenIsSTSBearer());
+  EXPECT_THAT(token, AccessTokenIsSTSBearer());
 }
 
 }  // namespace grpc_core
