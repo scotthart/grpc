@@ -53,6 +53,7 @@ namespace grpc_core {
 namespace {
 
 auto constexpr kExpectedFormatVersion = "1";
+auto constexpr kTokenLifetime = std::chrono::seconds(3600);
 
 struct OpenSslDeleter {
   void operator()(EVP_MD_CTX* ptr) {
@@ -344,51 +345,20 @@ GDCHServiceAccountCredentials::GDCHServiceAccountCredentials(
       info_(std::move(info)),
       audience_(std::move(audience)) {}
 
-std::string GDCHServiceAccountCredentials::debug_string() {
-  return absl::StrCat("GDCHServiceAccountCredentials{Audience:", audience(),
-                      ")");
-}
-
-UniqueTypeName GDCHServiceAccountCredentials::Type() {
-  static UniqueTypeName::Factory kFactory("GDCHServiceAccountCredentials");
-  return kFactory.Create();
-}
-#if 0
-OrphanablePtr<ExternalAccountCredentials::FetchBody>
-GDCHServiceAccountCredentials::RetrieveSubjectToken(
-    Timestamp /*deadline*/,
-    absl::AnyInvocable<void(absl::StatusOr<std::string>)> on_done) {
-  return MakeOrphanable<GDCHServiceAccountFetchBody>(std::move(on_done), this);
-}
-#endif
-
 std::pair<std::string, std::string>
-GDCHServiceAccountCredentials::AssertionComponentsFromInfo(Info const& info,
-                                                           std::chrono::system_clock::time_point now) {
+GDCHServiceAccountCredentials::AssertionComponentsFromInfo(
+    Info const& info, std::chrono::system_clock::time_point now) {
   Json header = Json::FromObject({
       {"alg", Json::FromString("ES256")},
       {"typ", Json::FromString("JWT")},
       {"kid", Json::FromString(info.private_key_id)},
   });
 
-  auto expiration = now + std::chrono::seconds(3600);
-
+  auto expiration = now + kTokenLifetime;
   auto const now_from_epoch =
       static_cast<std::intmax_t>(std::chrono::system_clock::to_time_t(now));
   auto const expiration_from_epoch = static_cast<std::intmax_t>(
       std::chrono::system_clock::to_time_t(expiration));
-  std::cout << __func__ << ": now_from_epoch=" << now_from_epoch << std::endl;
-  std::cout << __func__ << ": expiration_from_epoch=" << expiration_from_epoch << std::endl; 
-
-#if 0
-  // Resulting access token should expire after one hour.
-  gpr_timespec token_lifetime = {3600, 0, GPR_TIMESPAN};
-  gpr_timespec now_realtime = gpr_convert_clock_type(now, GPR_CLOCK_REALTIME);
-  gpr_timespec expiration = gpr_time_add(now_realtime, token_lifetime);
-
-  std::cout << __func__ << ": now_realtime.tv_sec=" << now_realtime.tv_sec << std::endl;
-  std::cout << __func__ << ": expiration.tv_sec=" << expiration.tv_sec << std::endl; 
-#endif
   auto iss_sub_value = absl::StrCat("system:serviceaccount:", info.project_id,
                                     ":", info.service_identity_name);
 
@@ -398,12 +368,8 @@ GDCHServiceAccountCredentials::AssertionComponentsFromInfo(Info const& info,
       {"aud", Json::FromString(info.token_uri)},
       {"iat", Json::FromNumber(now_from_epoch)},
       {"exp", Json::FromNumber(expiration_from_epoch)},
-
-      // {"iat", Json::FromNumber(now_realtime.tv_sec)},
-      // {"exp", Json::FromNumber(expiration.tv_sec)},
   });
 
-  // Note: we don't move here as it would prevent copy elision.
   return std::make_pair(JsonDump(header), JsonDump(claim));
 }
 
@@ -420,43 +386,8 @@ absl::StatusOr<std::string> GDCHServiceAccountCredentials::MakeJWTAssertion(
 
 absl::StatusOr<std::string> GDCHServiceAccountCredentials::CreateRequestBody(
     Info const& info, std::string const& audience) {
-#if 0
-  auto constexpr assertion_header = R"""({
-  "alg": "ES256",
-  "typ": "JWT",
-  "kid": "%s"
-})""";
-  auto header = JsonParse(absl::StrFormat(assertion_header,
-    info.private_key_id));
-
-  auto now = std::chrono::system_clock::now();
-  auto expiration = now + std::chrono::seconds(3600);
-
-  auto const now_from_epoch =
-      static_cast<std::intmax_t>(std::chrono::system_clock::to_time_t(now));
-  auto const expiration_from_epoch = static_cast<std::intmax_t>(
-      std::chrono::system_clock::to_time_t(expiration));
-  auto iss_sub_value = absl::StrCat("system:serviceaccount:", info.project_id,
-                                    ":", info.service_identity_name);
-
-  auto constexpr assertion_payload = R"""({
-    "iss": "%s",
-    "sub": "%s",
-    "aud": "%s",
-    "iat": %d,
-    "exp": %d
-})""";
-
-  auto payload = JsonParse(absl::StrFormat(assertion_payload,
-    iss_sub_value, iss_sub_value, info.token_uri, now_from_epoch, expiration_from_epoch));
-#endif
-
-  // gpr_timespec now = gpr_now(GPR_CLOCK_REALTIME);
-  // auto now = std::chrono::system_clock::now();
-
-  auto [header, claim] = AssertionComponentsFromInfo(info, std::chrono::system_clock::now());
-  std::cout << __func__ << ": header=\n" << header << std::endl;
-  std::cout << __func__ << ": claim=\n" << claim << std::endl;
+  auto [header, claim] =
+      AssertionComponentsFromInfo(info, std::chrono::system_clock::now());
   auto jwt =
       MakeJWTAssertion(header, claim, info.private_key, SignatureFormat::kRaw);
   if (!jwt.ok()) return jwt.status();
@@ -472,43 +403,7 @@ absl::StatusOr<std::string> GDCHServiceAccountCredentials::CreateRequestBody(
        Json::FromString("urn:k8s:params:oauth:token-type:serviceaccount")},
   });
 
-  std::string payload_str = JsonDump(payload);
-  std::cout << __func__ << ": payload=\n" << payload_str << std::endl;
-  return payload_str;
-
-#if 0
-
-  grpc_auth_json_key json_key;
-  json_key.private_key_id = gpr_strdup(info.private_key_id.c_str());
-  json_key.client_email = gpr_strdup(iss_sub_value.c_str());
-
-  // begin copy private key
-  BIO* bio = BIO_new(BIO_s_mem());
-  int success = BIO_puts(bio, info.private_key.c_str());
-  if ((success < 0) || (static_cast<size_t>(success) != strlen(info.private_key.c_str()))) {
-    if (bio != nullptr) BIO_free(bio);
-    if (!success) grpc_auth_json_key_destruct(&json_key);
-    return GRPC_ERROR_CREATE("Could not write into openssl BIO");
-
-  }
-#if OPENSSL_VERSION_NUMBER < 0x30000000L
-  json_key.private_key =
-      PEM_read_bio_RSAPrivateKey(bio, nullptr, nullptr, const_cast<char*>(""));
-#else
-  json_key.private_key = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
-#endif
-  if (json_key.private_key == nullptr) {
-    if (bio != nullptr) BIO_free(bio);
-    if (!success) grpc_auth_json_key_destruct(&json_key);
-    return GRPC_ERROR_CREATE("Could not deserialize private key");
-  }
-  // end copy private key
-
-  gpr_timespec token_lifetime{3600, 0, GPR_TIMESPAN};
-  auto jwt = grpc_jwt_encode_and_sign(&json_key, info.token_uri.c_str(),
-    token_lifetime, nullptr, "ES256", RAW);
-  if (!jwt) return GRPC_ERROR_CREATE("Error creating JWT");
-#endif
+  return JsonDump(payload);
 }
 
 void GDCHServiceAccountCredentials::GrpcDeleter::operator()(
@@ -563,72 +458,14 @@ absl::StatusOr<std::string> GDCHServiceAccountCredentials::ParseHttpResponse(
   return response_it->second.string();
 }
 
-OrphanablePtr<ExternalAccountCredentials::FetchBody>
-GDCHServiceAccountCredentials::RetrieveSubjectToken(
-    Timestamp deadline,
-    absl::AnyInvocable<void(absl::StatusOr<std::string>)> on_done) {
-  absl::StatusOr<URI> url = URI::Parse(info_.token_uri);
-  if (!url.ok()) {
-    return MakeOrphanable<NoOpFetchBody>(
-        event_engine(), std::move(on_done),
-        absl_status_to_grpc_error(url.status()));
-  }
-  auto request = FormatHttpRequest(info_, audience_);
-  if (!request.ok()) {
-    return MakeOrphanable<NoOpFetchBody>(
-        event_engine(), std::move(on_done),
-        absl_status_to_grpc_error(request.status()));
-  }
+UniqueTypeName GDCHServiceAccountCredentials::Type() {
+  static UniqueTypeName::Factory kFactory("GDCHServiceAccountCredentials");
+  return kFactory.Create();
+}
 
-  return MakeOrphanable<HttpFetchBody>(
-      // absl::FunctionRef<OrphanablePtr<HttpRequest>(
-      // grpc_http_response*, grpc_closure*)> start_http_request
-      [this, deadline, url = std::move(url), request = std::move(request)](
-          grpc_http_response* response, grpc_closure* on_http_response) {
-        // memset(&request, 0, sizeof(grpc_http_request));
-        // request.path = gpr_strdup(url_full_path_.c_str());
-        // grpc_http_header* headers = nullptr;
-        // request.hdr_count = 1;
-        // headers = static_cast<grpc_http_header*>(
-        //     gpr_malloc(sizeof(grpc_http_header) * request.hdr_count));
-        // int i = 0;
-        // for (auto const& header :
-        //   {std::pair<std::string, std::string>{"content-type",
-        //   "application/json"}}) { headers[i].key =
-        //   gpr_strdup(header.first.c_str()); headers[i].value =
-        //   gpr_strdup(header.second.c_str());
-        //   ++i;
-        // }
-        // request.hdrs = headers;
-        // // body is NOT null-terminated
-        // request.body = "";  // jwt goes here
-        // // look for other places in code base to see if length is computed
-        // // correctly
-        // request.body_length = static_cast<int>(request.body.size());
-
-        RefCountedPtr<grpc_channel_credentials> http_request_creds;
-        if (url->scheme() == "http") {
-          http_request_creds = RefCountedPtr<grpc_channel_credentials>(
-              grpc_insecure_credentials_create());
-        } else {
-          http_request_creds = CreateHttpRequestSSLCredentials();
-        }
-        auto http_request =
-            HttpRequest::Post(std::move(*url), /*args=*/nullptr, pollent(),
-                              request->get(), deadline, on_http_response,
-                              response, std::move(http_request_creds));
-        http_request->Start();
-        return http_request;
-      },
-      // absl::AnyInvocable<void(absl::StatusOr<std::string>)> on_done
-      [on_done = std::move(on_done)](
-          absl::StatusOr<std::string> response_body) mutable {
-        if (!response_body.ok()) {
-          on_done(std::move(response_body));
-          return;
-        }
-        on_done(ParseHttpResponse(*response_body));
-      });
+std::string GDCHServiceAccountCredentials::debug_string() {
+  return absl::StrCat("GDCHServiceAccountCredentials{Audience:", audience(),
+                      ")");
 }
 
 class GDCHServiceAccountCredentials::GDCHFetchRequest final
@@ -685,6 +522,50 @@ GDCHServiceAccountCredentials::FetchToken(
     Timestamp deadline,
     absl::AnyInvocable<void(absl::StatusOr<RefCountedPtr<Token>>)> on_done) {
   return MakeOrphanable<GDCHFetchRequest>(this, deadline, std::move(on_done));
+}
+
+OrphanablePtr<ExternalAccountCredentials::FetchBody>
+GDCHServiceAccountCredentials::RetrieveSubjectToken(
+    Timestamp deadline,
+    absl::AnyInvocable<void(absl::StatusOr<std::string>)> on_done) {
+  absl::StatusOr<URI> url = URI::Parse(info_.token_uri);
+  if (!url.ok()) {
+    return MakeOrphanable<NoOpFetchBody>(
+        event_engine(), std::move(on_done),
+        absl_status_to_grpc_error(url.status()));
+  }
+  auto request = FormatHttpRequest(info_, audience_);
+  if (!request.ok()) {
+    return MakeOrphanable<NoOpFetchBody>(
+        event_engine(), std::move(on_done),
+        absl_status_to_grpc_error(request.status()));
+  }
+
+  return MakeOrphanable<HttpFetchBody>(
+      [this, deadline, url = std::move(url), request = std::move(request)](
+          grpc_http_response* response, grpc_closure* on_http_response) {
+        RefCountedPtr<grpc_channel_credentials> http_request_creds;
+        if (url->scheme() == "http") {
+          http_request_creds = RefCountedPtr<grpc_channel_credentials>(
+              grpc_insecure_credentials_create());
+        } else {
+          http_request_creds = CreateHttpRequestSSLCredentials();
+        }
+        auto http_request =
+            HttpRequest::Post(std::move(*url), /*args=*/nullptr, pollent(),
+                              request->get(), deadline, on_http_response,
+                              response, std::move(http_request_creds));
+        http_request->Start();
+        return http_request;
+      },
+      [on_done = std::move(on_done)](
+          absl::StatusOr<std::string> response_body) mutable {
+        if (!response_body.ok()) {
+          on_done(std::move(response_body));
+          return;
+        }
+        on_done(ParseHttpResponse(*response_body));
+      });
 }
 
 absl::string_view GDCHServiceAccountCredentials::CredentialSourceType() {
