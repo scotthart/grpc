@@ -424,8 +424,8 @@ GDCHServiceAccountCredentials::FormatHttpRequest(Info const& info,
   if (!url.ok()) return url.status();
   request->path = gpr_strdup(url->path().empty() ? "/" : url->path().c_str());
   request->hdr_count = 1;
-  request->hdrs = static_cast<grpc_http_header*>(
-      gpr_malloc(sizeof(grpc_http_header)));
+  request->hdrs =
+      static_cast<grpc_http_header*>(gpr_malloc(sizeof(grpc_http_header)));
   request->hdrs[0].key = gpr_strdup("content-type");
   request->hdrs[0].value = gpr_strdup("application/json");
 
