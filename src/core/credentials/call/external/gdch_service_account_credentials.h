@@ -91,7 +91,7 @@ class GDCHServiceAccountCredentials final : public ExternalAccountCredentials {
  private:
   friend class GDCHServiceAccountCredentialsTest;
   friend class ExternalAccountCredentialsTest;
-  friend grpc_call_credentials* ::grpc_gdch_service_account_credentials_create(
+  friend grpc_call_credentials* grpc_gdch_service_account_credentials_create(
       const char* json_string, const char* audience_string);
 
   // OpenSSL outputs DER format signatures by default. RFC-7515 (JWT/JWS)
@@ -117,7 +117,6 @@ class GDCHServiceAccountCredentials final : public ExternalAccountCredentials {
       SignatureFormat format);
 
   static absl::StatusOr<Info> ParseServiceAccountJson(Json const& json);
-
 
   static AssertionComponents AssertionComponentsFromInfo(
       Info const& info, std::chrono::system_clock::time_point now);
