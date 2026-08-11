@@ -120,7 +120,7 @@ class GDCHServiceAccountCredentials final : public HttpTokenFetcherCredentials {
 
  private:
   friend class GDCHServiceAccountCredentialsTest;
-  friend grpc_call_credentials* ::grpc_gdch_service_account_credentials_create(
+  friend grpc_call_credentials* grpc_gdch_service_account_credentials_create(
       const char* json_string, const char* audience_string);
 
   // OpenSSL outputs DER format signatures by default. RFC-7515 (JWT/JWS)
