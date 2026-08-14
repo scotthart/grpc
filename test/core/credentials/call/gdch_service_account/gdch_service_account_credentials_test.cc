@@ -21,14 +21,6 @@
 #include <utility>
 #include <vector>
 
-#include <gtest/gtest.h>
-
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/escaping.h"
-#include "absl/strings/str_split.h"
-#include "absl/strings/string_view.h"
-
 #include "src/core/util/http_client/parser.h"
 #include "src/core/util/json/json.h"
 #include "src/core/util/json/json_reader.h"
@@ -37,6 +29,12 @@
 #include "src/core/util/time.h"
 #include "src/core/util/uri.h"
 #include "test/core/test_util/test_config.h"
+#include "gtest/gtest.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/escaping.h"
+#include "absl/strings/str_split.h"
+#include "absl/strings/string_view.h"
 
 namespace grpc_core {
 namespace {
@@ -177,8 +175,7 @@ TEST_F(GDCHServiceAccountCredentialsTest, CreateFailureNotAnObject) {
   EXPECT_FALSE(creds.ok());
 }
 
-TEST_F(GDCHServiceAccountCredentialsTest,
-       CreateFailureMissingRequiredFields) {
+TEST_F(GDCHServiceAccountCredentialsTest, CreateFailureMissingRequiredFields) {
   const std::vector<std::string> required_fields = {
       "type",        "format_version", "project",  "private_key_id",
       "private_key", "name",           "token_uri"};
@@ -194,8 +191,7 @@ TEST_F(GDCHServiceAccountCredentialsTest,
   }
 }
 
-TEST_F(GDCHServiceAccountCredentialsTest,
-       CreateFailureEmptyRequiredFields) {
+TEST_F(GDCHServiceAccountCredentialsTest, CreateFailureEmptyRequiredFields) {
   const std::vector<std::string> required_fields = {
       "type",        "format_version", "project",  "private_key_id",
       "private_key", "name",           "token_uri"};
@@ -211,8 +207,7 @@ TEST_F(GDCHServiceAccountCredentialsTest,
   }
 }
 
-TEST_F(GDCHServiceAccountCredentialsTest,
-       CreateFailureEmptyOptionalField) {
+TEST_F(GDCHServiceAccountCredentialsTest, CreateFailureEmptyOptionalField) {
   Json::Object obj = CreateValidServiceAccountObject();
   obj["ca_cert_path"] = Json::FromString("");
   absl::StatusOr<RefCountedPtr<GDCHServiceAccountCredentials>> creds =
@@ -231,8 +226,7 @@ TEST_F(GDCHServiceAccountCredentialsTest, CreateFailureInvalidType) {
   EXPECT_FALSE(creds.ok());
 }
 
-TEST_F(GDCHServiceAccountCredentialsTest,
-       CreateFailureInvalidFormatVersion) {
+TEST_F(GDCHServiceAccountCredentialsTest, CreateFailureInvalidFormatVersion) {
   Json::Object obj = CreateValidServiceAccountObject();
   obj["format_version"] = Json::FromString("2");
   absl::StatusOr<RefCountedPtr<GDCHServiceAccountCredentials>> creds =
