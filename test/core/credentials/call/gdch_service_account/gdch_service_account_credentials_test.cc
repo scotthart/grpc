@@ -16,8 +16,6 @@
 
 #include "src/core/credentials/call/gdch_service_account/gdch_service_account_credentials.h"
 
-#include <gtest/gtest.h>
-
 #include <string>
 #include <vector>
 
@@ -27,6 +25,7 @@
 #include "src/core/util/ref_counted_ptr.h"
 #include "src/core/util/time.h"
 #include "test/core/test_util/test_config.h"
+#include "gtest/gtest.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"

@@ -161,11 +161,12 @@ absl::StatusOr<std::string> DERToRawSignature(const std::string& der_sig,
 
 struct Response {
   std::string access_token;
-    
+
   static const JsonLoaderInterface* JsonLoader(const JsonArgs&) {
-    static const auto* loader = JsonObjectLoader<Response>()
-        .Field("access_token", &Response::access_token)
-        .Finish();
+    static const auto* loader =
+        JsonObjectLoader<Response>()
+            .Field("access_token", &Response::access_token)
+            .Finish();
     return loader;
   }
 };
