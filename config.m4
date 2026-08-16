@@ -99,6 +99,7 @@ if test "$PHP_GRPC" != "no"; then
     src/core/credentials/call/external/aws_request_signer.cc \
     src/core/credentials/call/external/external_account_credentials.cc \
     src/core/credentials/call/external/file_external_account_credentials.cc \
+    src/core/credentials/call/external/gdch_service_account_credentials.cc \
     src/core/credentials/call/external/url_external_account_credentials.cc \
     src/core/credentials/call/gcp_service_account_identity/gcp_service_account_identity_credentials.cc \
     src/core/credentials/call/iam/iam_credentials.cc \
